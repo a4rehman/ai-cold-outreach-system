@@ -1,0 +1,14 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LEAD GEN SYSTEM v2.0                                                        │
+│ Professional Pipeline Initialized...                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────── 🚀 LEAD GEN SYSTEM | Progress: 0/50 ────────────────────┐
+│  Node                   Status             Message                          │
+│  Discover Leads         🔍 Searching       Scanning Google Maps...          │
+│  Scrape Website         ⏳ Pending         Waiting...                       │
+│  Analyze With Ai        ⏳ Pending         Waiting...                       │
+│  Send Email             ⏳ Pending         Waiting...                       │
+│  Save Progress          ⏳ Pending         Waiting...                       │
+└──────────────────────────── Sent: 0 | Failed: 0 ────────────────────────────┘
+
+[!] Process interrupted by user.

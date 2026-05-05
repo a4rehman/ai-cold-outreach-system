@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Data & Output
+data/
+*.json
+*.csv
+*.png
+*.mmd
+
+# IDEs
+.vscode/
+.idea/
