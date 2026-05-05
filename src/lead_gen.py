@@ -49,6 +49,26 @@ MEMORY_FILE     = os.path.join(DATA_DIR, "processed_leads.json")
 AI_MODEL        = "gpt-4o-mini"
 AI_MAX_RETRIES  = 3
 
+# --- Prompts ---
+VALIDATION_PROMPT = """
+You are an expert email quality checker.
+
+Check the following cold email and return JSON only:
+{
+    "is_good": "YES" or "NO",
+    "mistakes": ["list of mistakes in grammar, tone, personalization, or spammy language"],
+    "improved_subject": "fixed subject line",
+    "improved_message": "fixed email body"
+}
+
+Rules:
+- Keep it under 120 words
+- Make it natural and human
+- Avoid generic sales phrases
+- Ensure proper personalization
+- Clear CTA required
+"""
+
 # --- SMTP Config ---
 SMTP_SERVER     = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT       = int(os.environ.get("SMTP_PORT", "587"))
@@ -109,7 +129,7 @@ def print_dashboard(state: WorkflowState, status_line: str = ""):
     table.add_column("Message", style="white")
 
     ni = state.get("node_info", {})
-    nodes = ["discover_leads", "scrape_website", "analyze_with_ai", "send_email", "save_progress"]
+    nodes = ["discover_leads", "scrape_website", "analyze_with_ai", "validate_with_ai", "send_email", "save_progress"]
     for node in nodes:
         info = ni.get(node, {"status": "⏳ Pending", "message": "Waiting..."})
         table.add_row(node.replace("_", " ").title(), info["status"], info["message"])
@@ -351,6 +371,47 @@ async def analyze_with_ai(state: WorkflowState):
     report["status"] = "ai_failed"
     return {"node_info": ni, "failed_count": state["failed_count"] + 1}
 
+async def validate_with_ai(state: WorkflowState):
+    if not state.get("reports"):
+        return {"node_info": _node_info(state, "validate_with_ai", "⏭ Skipped", "No report")}
+        
+    report = state["reports"][-1]
+    if report.get("status") in ["scrape_failed", "ai_failed"]:
+        return {"node_info": _node_info(state, "validate_with_ai", "⏭ Skipped", "No content")}
+
+    ni = _node_info(state, "validate_with_ai", "🛡️ Validating", f"Reviewing email for {report['website']}")
+    print_dashboard({**state, "node_info": ni})
+
+    validation_input = f"""
+    Subject: {report.get('email_subject')}
+    Message: {report.get('email_message')}
+    """
+
+    for attempt in range(AI_MAX_RETRIES):
+        try:
+            response = client.chat.completions.create(
+                model=AI_MODEL,
+                messages=[{"role": "system", "content": VALIDATION_PROMPT},
+                          {"role": "user", "content": validation_input}],
+                response_format={ "type": "json_object" }
+            )
+            val_data = json.loads(response.choices[0].message.content)
+            
+            # Apply improvements
+            report["validation_results"] = val_data
+            if val_data.get("improved_subject"):
+                report["email_subject"] = val_data["improved_subject"]
+            if val_data.get("improved_message"):
+                report["email_message"] = val_data["improved_message"]
+            
+            ni = _node_info(state, "validate_with_ai", "✅ Done", f"Quality: {val_data.get('is_good')}")
+            return {"reports": [report], "node_info": ni}
+        except:
+            await asyncio.sleep(2)
+            
+    ni = _node_info(state, "validate_with_ai", "⚠️ Warning", "Validation failed, using original")
+    return {"node_info": ni}
+
 async def send_email_node(state: WorkflowState):
     if not state.get("reports"):
         return {"node_info": _node_info(state, "send_email", "⏭ Skipped", "No report")}
@@ -442,13 +503,15 @@ def build_graph():
     g.add_node("discover_leads", discover_leads)
     g.add_node("scrape_website", scrape_website)
     g.add_node("analyze_with_ai", analyze_with_ai)
+    g.add_node("validate_with_ai", validate_with_ai)
     g.add_node("send_email", send_email_node)
     g.add_node("save_progress", save_progress)
 
     g.set_entry_point("discover_leads")
     g.add_edge("discover_leads", "scrape_website")
     g.add_edge("scrape_website", "analyze_with_ai")
-    g.add_edge("analyze_with_ai", "send_email")
+    g.add_edge("analyze_with_ai", "validate_with_ai")
+    g.add_edge("validate_with_ai", "send_email")
     g.add_edge("send_email", "save_progress")
     
     def should_continue(state):
