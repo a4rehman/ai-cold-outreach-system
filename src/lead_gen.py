@@ -350,27 +350,23 @@ async def analyze_with_ai(state: WorkflowState):
     EMAIL REQUIREMENTS
     ========================
     1. Create:
-       - business_name (Extract from content if possible)
-       - email_subject
+       - business_name (Extract from content)
+       - email_subject (Professional & intriguing)
        - email_message
     
-    2. The email should:
-       - NEVER use placeholders like [Recipient's Name], [Name], or [Business Name].
-       - If you don't know the owner's name, use "Hi {report.get('business_name', 'Team')}" or "Hi Architeqt Salon Team".
-       - appreciate something specific about the business found in the scraped content.
-       - mention 1–2 real issues or optimization opportunities.
-       - ask for a short call or discussion.
+    2. The email structure:
+       - Hook: Appreciate a specific service or project from their site (show you actually looked).
+       - The Gap: Mention 1-2 specific problems found (e.g., outdated design, missing local SEO, generic email, no booking system, slow mobile experience).
+       - The Solution: Briefly explain HOW fixing these will grow their business (e.g., "Moving from a Gmail address to a custom domain will build immediate trust with premium clients").
+       - The Value: Mention how we (100Solutionz) specialize in solving exactly these points for salons.
+       - CTA: Ask for a 10-minute call to discuss the solutions.
     
-    3. Tone:
-       - friendly, confident, professional, and human.
+    3. Rules:
+       - NEVER use placeholders like [Name].
+       - Be specific. Don't say "your website has issues". Say "your booking flow requires 4 clicks, which might be losing you customers."
+       - End with exactly: Best regards, Abdul Rehman.
     
-    4. Avoid:
-       - fake urgency, overpromising, spam wording, or long paragraphs.
-    
-    5. End every email with exactly:
-    
-    Best regards,
-    Abdul Rehman
+    4. Tone: Helpful, professional, and confident.
     
     ========================
     OUTPUT FORMAT
