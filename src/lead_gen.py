@@ -57,12 +57,13 @@ You are an expert email quality checker.
 Check the following cold email and return JSON only:
 {
     "is_good": "YES" or "NO",
-    "mistakes": ["list of mistakes in grammar, tone, personalization, or spammy language"],
+    "mistakes": ["list of mistakes like placeholders [Name], robotic tone, generic CTA"],
     "improved_subject": "fixed subject line",
     "improved_message": "fixed email body"
 }
 
 Rules:
+- NO PLACEHOLDERS like [Name] or [Business Name]. Use "Hi Team" or the actual business name.
 - Keep it under 120 words
 - Make it natural and human
 - Avoid generic sales phrases
@@ -349,23 +350,24 @@ async def analyze_with_ai(state: WorkflowState):
     EMAIL REQUIREMENTS
     ========================
     1. Create:
-       - business_name
+       - business_name (Extract from content if possible)
        - email_subject
        - email_message
     
     2. The email should:
-       - appreciate something about the business found in the scraped content
-       - mention 1–2 real issues or optimization opportunities found in the content
-       - explain how digital improvements (like local SEO or pro booking) can help
-       - ask for a short call or discussion
+       - NEVER use placeholders like [Recipient's Name], [Name], or [Business Name].
+       - If you don't know the owner's name, use "Hi {report.get('business_name', 'Team')}" or "Hi Architeqt Salon Team".
+       - appreciate something specific about the business found in the scraped content.
+       - mention 1–2 real issues or optimization opportunities.
+       - ask for a short call or discussion.
     
     3. Tone:
-       - friendly, confident, professional, and human
+       - friendly, confident, professional, and human.
     
     4. Avoid:
-       - fake urgency, overpromising, spam wording, or long paragraphs
+       - fake urgency, overpromising, spam wording, or long paragraphs.
     
-    5. End every email with:
+    5. End every email with exactly:
     
     Best regards,
     Abdul Rehman
@@ -480,8 +482,11 @@ async def send_email_node(state: WorkflowState):
         msg = EmailMessage()
         msg.set_content(report.get("email_message", ""))
         msg['Subject'] = subject
-        msg['From'] = EMAIL_USER
-        msg['To'] = target_email
+        msg['From'] = f"Abdul Rehman <{EMAIL_USER}>"
+        
+        # Use business name in To field for a professional look
+        biz_name = report.get("business_name", "Team").replace('"', '').replace('<', '').replace('>', '')
+        msg['To'] = f"{biz_name} <{target_email}>"
 
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
             server.starttls()
