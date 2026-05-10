@@ -1,3 +1,4 @@
+
 import os, re, json, asyncio, operator, warnings, csv, sys, random, smtplib
 from typing import TypedDict, List, Optional, Annotated
 from datetime import datetime
@@ -324,31 +325,60 @@ async def analyze_with_ai(state: WorkflowState):
     print_dashboard({**state, "node_info": ni})
 
     prompt = f"""
-    Analyze this beauty salon's website data and write a short, high-converting cold email.
+    You are an expert cold email copywriter.
+    Your job is to generate SHORT, HUMAN, and HIGH-CONVERTING cold emails for local businesses and salons.
     
-    Salone Website: {report['website']}
+    The emails must:
+    - sound natural and professional
+    - NOT sound robotic or spammy
+    - be personalized using business details
+    - focus on helping the business improve online presence
+    - be concise (80–140 words)
+    - include a simple CTA
+    - use the sender name: Abdul Rehman
+    
+    ========================
+    INPUT DATA
+    ========================
+    Business Website: {report['website']}
     Scraped Content: {report['text']}
+    Our Website: 100solutionz.vercel.app
+    Our Location: London, England
     
-    Sender Info:
-    - Company: 100Solutionz
-    - CEO: Waqar Hassan
-    - Website: 100solutionz.vercel.app
-    - Value Prop: We professionalize digital infrastructure (pro emails, local SEO, booking flow) for premium salons.
+    ========================
+    EMAIL REQUIREMENTS
+    ========================
+    1. Create:
+       - business_name
+       - email_subject
+       - email_message
     
-    Email Rules (CRITICAL):
-    1. Length: Under 120 words.
-    2. Hook: Start with a strong, personalized compliment about their specific work or services found on their site in the first 2 lines.
-    3. Tone: Human, natural, and confident. NOT robotic or generic. Avoid "I hope this finds you well".
-    4. Focus: Client benefit. Mention a specific issue found (e.g., generic email, outdated site, missing SEO) and how fixing it helps them.
-    5. Language: Simple, easy English. No fluff.
-    6. CTA: A simple "10-minute call" request.
-    7. Signature: Signed by Waqar Hassan, CEO at 100Solutionz.
+    2. The email should:
+       - appreciate something about the business found in the scraped content
+       - mention 1–2 real issues or optimization opportunities found in the content
+       - explain how digital improvements (like local SEO or pro booking) can help
+       - ask for a short call or discussion
     
-    Return JSON only:
+    3. Tone:
+       - friendly, confident, professional, and human
+    
+    4. Avoid:
+       - fake urgency, overpromising, spam wording, or long paragraphs
+    
+    5. End every email with:
+    
+    Best regards,
+    Abdul Rehman
+    
+    ========================
+    OUTPUT FORMAT
+    ========================
+    Return ONLY valid JSON:
+    
     {{
-        "business_name": "...",
-        "email_subject": "...",
-        "email_message": "..."
+      "business_name": "...",
+      "email_subject": "...",
+      "email_message": "..."
     }}
     """
 
