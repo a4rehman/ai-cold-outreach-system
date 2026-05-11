@@ -358,7 +358,7 @@ async def analyze_with_ai(state: WorkflowState):
        - Hook: Appreciate a specific service or project from their site (show you actually looked).
        - The Gap: Mention 1-2 specific problems found (e.g., outdated design, missing local SEO, generic email, no booking system, slow mobile experience).
        - The Solution: Briefly explain HOW fixing these will grow their business (e.g., "Moving from a Gmail address to a custom domain will build immediate trust with premium clients").
-       - The Value: Mention how we (100Solutionz) specialize in solving exactly these points for salons.
+       - The Value: Mention how we (100Solutionz) specialize in solving these specific issues for premium salons. Invite them to check out our previous work at 100solutionz.vercel.app.
        - CTA: Ask for a 10-minute call to discuss the solutions.
     
     3. Rules:
