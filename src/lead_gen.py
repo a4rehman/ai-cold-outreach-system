@@ -124,7 +124,11 @@ def _node_info(state, node, status, message=""):
     ni[node] = {"status": status, "message": message}
     return ni
 
-def print_dashboard(state: WorkflowState, status_line: str = ""):
+def print_dashboard(state: WorkflowState, status_line: str = "", ui_callback=None):
+    # If a UI callback is provided (e.g., from Streamlit), use it
+    if ui_callback:
+        ui_callback(state)
+
     table = Table(box=None, expand=True)
     table.add_column("Node", style="bold cyan")
     table.add_column("Status", style="bold magenta")
@@ -145,14 +149,17 @@ def print_dashboard(state: WorkflowState, status_line: str = ""):
         subtitle=f"Sent: [bold green]{state['emails_sent']}[/] | Failed: [bold red]{state['failed_count']}[/]",
         border_style="bright_blue"
     )
-    console.clear()
-    console.print(summary_panel)
+    # Only clear and print to console if not in UI mode (or do both)
+    if not ui_callback:
+        console.clear()
+        console.print(summary_panel)
 
 # --- NODES ---
 
 async def discover_leads(state: WorkflowState):
+    ui_cb = state.get("ui_callback")
     ni = _node_info(state, "discover_leads", "🔍 Searching", "Scanning Google Maps...")
-    print_dashboard({**state, "node_info": ni})
+    print_dashboard({**state, "node_info": ni}, ui_callback=ui_cb)
     
     processed_memory = load_memory()
     cities = [
@@ -230,11 +237,12 @@ async def discover_leads(state: WorkflowState):
 async def scrape_website(state: WorkflowState):
     urls = state["discovered_urls"]
     idx = state["current_index"]
+    ui_cb = state.get("ui_callback")
     if idx >= len(urls): return state
 
     url = urls[idx]
     ni = _node_info(state, "scrape_website", "🌐 Scraping", f"Fetching {url}")
-    print_dashboard({**state, "node_info": ni})
+    print_dashboard({**state, "node_info": ni}, ui_callback=ui_cb)
 
     scrape_data = {"website": url, "text": "", "emails": [], "status": "pending"}
     
@@ -318,12 +326,13 @@ async def analyze_with_ai(state: WorkflowState):
         return {"node_info": ni}
         
     report = state["reports"][-1]
+    ui_cb = state.get("ui_callback")
     if report.get("status") == "scrape_failed":
         ni = _node_info(state, "analyze_with_ai", "⏭ Skipped", "No data")
         return {"node_info": ni}
 
     ni = _node_info(state, "analyze_with_ai", "🤖 AI Analyzing", f"Processing {report['website']}")
-    print_dashboard({**state, "node_info": ni})
+    print_dashboard({**state, "node_info": ni}, ui_callback=ui_cb)
 
     prompt = f"""
     You are an expert cold email copywriter.
@@ -404,11 +413,12 @@ async def validate_with_ai(state: WorkflowState):
         return {"node_info": _node_info(state, "validate_with_ai", "⏭ Skipped", "No report")}
         
     report = state["reports"][-1]
+    ui_cb = state.get("ui_callback")
     if report.get("status") in ["scrape_failed", "ai_failed"]:
         return {"node_info": _node_info(state, "validate_with_ai", "⏭ Skipped", "No content")}
 
     ni = _node_info(state, "validate_with_ai", "🛡️ Validating", f"Reviewing email for {report['website']}")
-    print_dashboard({**state, "node_info": ni})
+    print_dashboard({**state, "node_info": ni}, ui_callback=ui_cb)
 
     validation_input = f"""
     Subject: {report.get('email_subject')}
@@ -456,6 +466,7 @@ async def send_email_node(state: WorkflowState):
         return {"node_info": ni}
 
     target_email = report["emails"][0].strip()
+    ui_cb = state.get("ui_callback")
 
     # --- VALIDATION: Email Format ---
     email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
@@ -472,7 +483,7 @@ async def send_email_node(state: WorkflowState):
         return {"node_info": ni}
 
     ni = _node_info(state, "send_email", "📧 Sending", f"To: {target_email}")
-    print_dashboard({**state, "node_info": ni})
+    print_dashboard({**state, "node_info": ni}, ui_callback=ui_cb)
 
     try:
         msg = EmailMessage()
@@ -555,11 +566,18 @@ def build_graph():
     g.add_conditional_edges("save_progress", should_continue)
     return g.compile()
 
-async def run_pipeline():
+async def run_pipeline(target_override=None, ui_callback=None):
     # Ensure data directory exists
     os.makedirs(DATA_DIR, exist_ok=True)
     
-    console.print(Panel("[bold yellow]LEAD GEN SYSTEM v2.0[/]\n[dim]Professional Pipeline Initialized...[/]", border_style="yellow"))
+    # Update target if provided
+    global TARGET
+    if target_override:
+        TARGET = target_override
+
+    if not ui_callback:
+        console.print(Panel("[bold yellow]LEAD GEN SYSTEM v2.0[/]\n[dim]Professional Pipeline Initialized...[/]", border_style="yellow"))
+    
     app = build_graph()
     
     # Generate unique filenames for this run
@@ -574,7 +592,8 @@ async def run_pipeline():
         "emails_sent": 0,
         "failed_count": 0,
         "output_json": current_json,
-        "output_csv": current_csv
+        "output_csv": current_csv,
+        "ui_callback": ui_callback
     }
 
     try:
