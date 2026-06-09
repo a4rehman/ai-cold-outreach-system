@@ -4,7 +4,8 @@ import pandas as pd
 import os
 import json
 from datetime import datetime
-from src.lead_gen import run_pipeline, DATA_DIR
+import src.lead_gen as lead_gen
+from src.lead_gen import DATA_DIR
 
 # --- Page Config ---
 st.set_page_config(
@@ -50,6 +51,16 @@ if 'is_running' not in st.session_state:
 if 'pipeline_state' not in st.session_state:
     st.session_state.pipeline_state = None
 
+def hidden_config_input(label, env_name):
+    is_configured = bool(os.environ.get(env_name, ""))
+    return st.text_input(
+        label,
+        type="password",
+        value="",
+        placeholder="Configured (hidden)" if is_configured else "",
+        help="Leave blank to keep the current saved value." if is_configured else None,
+    )
+
 # --- Sidebar ---
 with st.sidebar:
     st.image("https://100solutionz.vercel.app/logo.png", width=200) # Placeholder for logo
@@ -59,17 +70,38 @@ with st.sidebar:
     
     st.markdown("---")
     st.subheader("API Configuration")
-    openai_key = st.text_input("OpenAI API Key", type="password", value=os.environ.get("OPENAI_API_KEY", ""))
+    openai_key = hidden_config_input("OpenAI API Key", "OPENAI_API_KEY")
     
     st.subheader("SMTP Configuration")
-    email_user = st.text_input("Sender Email", value=os.environ.get("EMAIL_USER", ""))
-    email_pass = st.text_input("Email Password", type="password", value=os.environ.get("EMAIL_PASSWORD", ""))
+    email_user = hidden_config_input("Sender Email", "EMAIL_USER")
+    email_pass = hidden_config_input("Email Password", "EMAIL_PASSWORD")
     
     if st.button("Save Config"):
-        os.environ["OPENAI_API_KEY"] = openai_key
-        os.environ["EMAIL_USER"] = email_user
-        os.environ["EMAIL_PASSWORD"] = email_pass
-        st.success("Config updated!")
+        updated = False
+
+        if openai_key.strip():
+            clean_openai_key = openai_key.strip()
+            os.environ["OPENAI_API_KEY"] = clean_openai_key
+            lead_gen.OPENAI_API_KEY = clean_openai_key
+            lead_gen.client = lead_gen.OpenAI(api_key=clean_openai_key)
+            updated = True
+
+        if email_user.strip():
+            clean_email_user = email_user.strip()
+            os.environ["EMAIL_USER"] = clean_email_user
+            lead_gen.EMAIL_USER = clean_email_user
+            updated = True
+
+        if email_pass.strip():
+            clean_email_pass = email_pass.strip()
+            os.environ["EMAIL_PASSWORD"] = clean_email_pass
+            lead_gen.EMAIL_PASS = clean_email_pass
+            updated = True
+
+        if updated:
+            st.success("Config updated!")
+        else:
+            st.info("No config changes entered. Existing hidden values were kept.")
 
 # --- Main Dashboard ---
 st.title("🚀 Salon Lead Generation & Outreach")
@@ -129,7 +161,7 @@ if st.session_state.is_running:
 
     # Run the async pipeline
     async def run_app():
-        await run_pipeline(target_override=target_count, ui_callback=ui_callback)
+        await lead_gen.run_pipeline(target_override=target_count, ui_callback=ui_callback)
         st.session_state.is_running = False
         st.success("Campaign Complete!")
         st.balloons()
