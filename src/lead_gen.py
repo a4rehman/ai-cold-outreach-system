@@ -4,6 +4,16 @@ from typing import TypedDict, List, Optional, Annotated
 from datetime import datetime
 from email.message import EmailMessage
 
+from outreach_core import (
+    clean_emails,
+    website_root,
+    is_valid_email_address,
+    is_valid_subject,
+    load_processed_memory,
+    save_processed_memory,
+    next_output_filename,
+)
+
 # Handle Windows Encoding
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -93,31 +103,10 @@ class WorkflowState(TypedDict):
 # --- Utility Functions ---
 
 def load_memory():
-    if os.path.exists(MEMORY_FILE):
-        try:
-            with open(MEMORY_FILE, "r") as f:
-                return set(json.load(f))
-        except: return set()
-    return set()
+    return load_processed_memory(MEMORY_FILE)
 
 def save_memory(url):
-    try:
-        memory = list(load_memory())
-        if url not in memory:
-            memory.append(url)
-            with open(MEMORY_FILE, "w") as f:
-                json.dump(memory, f)
-    except: pass
-
-def get_next_filename(base_name, extension):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    counter = 1
-    while True:
-        file_path = os.path.join(DATA_DIR, f"{base_name}({counter}){extension}")
-        if not os.path.exists(file_path):
-            return file_path
-        counter += 1
-
+    save_processed_memory(MEMORY_FILE, url)
 
 def _node_info(state, node, status, message=""):
     ni = state.get("node_info", {})
@@ -206,15 +195,14 @@ async def discover_leads(state: WorkflowState):
                     for link in links:
                         if len(new_urls) >= TARGET: break
                         href = await link.get_attribute("href")
-                        if not href or "google.com" in href: continue
-                        
-                        clean_url_match = re.match(r"(https?://[^/\s]+)", href.lower())
-                        if clean_url_match:
-                            url = clean_url_match.group(1).lower()
-                            bad_domains = ["yelp.com", "expertise.com", "fresha.com", "vagaro.com", "yellowpages.com", "mapquest.com", "mindbodyonline.com", "instagram.com", "facebook.com", "tiktok.com", "styleseat.com"]
-                            if not any(bad in url for bad in bad_domains) and url not in processed_memory and url not in new_urls:
-                                new_urls.append(url)
-                                found_in_city += 1
+                        url = website_root(href)
+                        if not url:
+                            continue
+
+                        bad_domains = ["yelp.com", "expertise.com", "fresha.com", "vagaro.com", "yellowpages.com", "mapquest.com", "mindbodyonline.com", "instagram.com", "facebook.com", "tiktok.com", "styleseat.com"]
+                        if not any(bad in url for bad in bad_domains) and url not in processed_memory and url not in new_urls:
+                            new_urls.append(url)
+                            found_in_city += 1
                     
                     if found_in_city > 0:
                         console.print(f"  [green]Found {found_in_city} leads in {city}[/green]")
@@ -250,38 +238,8 @@ async def scrape_website(state: WorkflowState):
         try:
             resp = await client_http.get(target_url, timeout=10.0)
             emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', resp.text)
-            
-            # Enhanced exclusion list to prevent false positives
-            blocked_domains = [
-                'sentry.io', 'wix.com', 'shopify.com', 'google.com', 'example.com', 
-                'domain.com', 'mysite.com', 'yourdomain.com', 'email.com', '2x.png', '3x.png'
-            ]
-            blocked_keywords = ['test', 'example', 'placeholder', 'mysite', 'yourdomain', 'template', 'globe@']
-            blocked_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.pdf', '.webp', '.css', '.js')
-            
-            clean_emails = []
-            for email in set(emails):
-                email_lower = email.lower()
-                
-                # Basic validation
-                if any(email_lower.endswith(ext) for ext in blocked_extensions): continue
-                if any(kw in email_lower for kw in blocked_keywords): continue
-                
-                # Convert googlemail.com to gmail.com as requested
-                if "googlemail.com" in email_lower:
-                    email_lower = email_lower.replace("googlemail.com", "gmail.com")
-                
-                domain = email_lower.split('@')[-1]
-                user = email_lower.split('@')[0]
-                
-                # Final check
-                if domain not in blocked_domains and len(user) < 30 and not re.search(r'[a-f0-9]{20,}', user) and 'sentry' not in email_lower and 'noreply' not in email_lower:
-                    clean_emails.append(email_lower)
-            
-            # Prioritize gmail.com addresses
-            clean_emails = sorted(list(set(clean_emails)), key=lambda x: ("gmail.com" not in x))
+            emails = clean_emails(set(emails))
 
-            
             # Extract links to contact/about pages
             soup = BeautifulSoup(resp.text, "html.parser")
             subpages = []
@@ -469,15 +427,14 @@ async def send_email_node(state: WorkflowState):
     ui_cb = state.get("ui_callback")
 
     # --- VALIDATION: Email Format ---
-    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
-    if not re.match(email_regex, target_email):
+    if not is_valid_email_address(target_email):
         ni = _node_info(state, "send_email", "⏭ Skipped", "Invalid email format")
         report["status"] = "invalid_email"
         return {"node_info": ni}
 
     # --- VALIDATION: Subject ---
     subject = report.get("email_subject", "").strip()
-    if not subject or subject in ["...", "Subject", "None", "null"] or len(subject) < 3:
+    if not is_valid_subject(subject):
         ni = _node_info(state, "send_email", "⏭ Skipped", "Invalid or missing subject")
         report["status"] = "invalid_subject"
         return {"node_info": ni}
@@ -581,8 +538,8 @@ async def run_pipeline(target_override=None, ui_callback=None):
     app = build_graph()
     
     # Generate unique filenames for this run
-    current_json = get_next_filename("lead_gen_results", ".json")
-    current_csv = get_next_filename("leads_for_google_sheets", ".csv")
+    current_json = next_output_filename(DATA_DIR, "lead_gen_results", ".json")
+    current_csv = next_output_filename(DATA_DIR, "leads_for_google_sheets", ".csv")
     
     initial_state = {
         "discovered_urls": [],
