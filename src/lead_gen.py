@@ -1,5 +1,6 @@
 
 import os, re, json, asyncio, operator, warnings, csv, sys, random, smtplib
+sys.path.insert(0, os.path.dirname(__file__))
 from typing import TypedDict, List, Optional, Annotated
 from datetime import datetime
 from email.message import EmailMessage
